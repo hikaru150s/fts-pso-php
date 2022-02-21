@@ -1,5 +1,5 @@
 <?php
-require_once './fuzzy.php';
+require_once 'fuzzy.php';
 
 class FTS {
     private $_dataset;
@@ -11,17 +11,24 @@ class FTS {
     private $_partitionRef;
     private $_ruleset;
 
+    private $_maxVal;
+    private $_minVal;
+    private $_lb;
+    private $_ub;
+
+    private $_memo;
+
     public function getMaxValue() {
-        return max(array_map(function($v) { return $v['value']; }, $this->_dataset));
+        return $this->_maxVal;
     }
     public function getMinValue() {
-        return min(array_map(function($v) { return $v['value']; }, $this->_dataset));
+        return $this->_minVal;
     }
     public function getLowerBound() {
-        return $this->minValue - $this->_minMargin;
+        return $this->_lb;
     }
     public function getUpperBound() {
-        return $this->maxValue + $this->_maxMargin;
+        return $this->_ub;
     }
     public function getPartitionCount() {
         return $this->_partitionCount;
@@ -31,10 +38,15 @@ class FTS {
     }
 
     public function __construct($dataset, $options = null) {
+        $this->_memo = [];
         $this->_dataset = $dataset;
+        $this->_maxVal = isset($options) && isset($options['_maxVal']) ? $options['_maxVal'] : max(array_map(function($v) { return $v['value']; }, $this->_dataset));
+        $this->_minVal = isset($options) && isset($options['_minVal']) ? $options['_minVal'] : min(array_map(function($v) { return $v['value']; }, $this->_dataset));
         $this->_marginMultiplier = isset($options) && isset($options['marginMultiplier']) ? $options['marginMultiplier'] : 0.1;
         $this->_minMargin = isset($options) && isset($options['minMargin']) ? $options['minMargin'] : ($this->minValue * $this->_marginMultiplier);
         $this->_maxMargin = isset($options) && isset($options['maxMargin']) ? $options['maxMargin'] : ($this->maxValue * $this->_marginMultiplier);
+        $this->_lb = $this->_minVal - $this->_minMargin;
+        $this->_ub = $this->_maxVal + $this->_maxMargin;
         if (isset($options) && isset($options['interval'])) {
             $this->_partitionInterval = $options['interval'];
             $this->_partitionCount = ceil(($this->getUpperBound() - $this->getLowerBound()) / $options['interval']);
@@ -54,22 +66,31 @@ class FTS {
     }
 
     private function nearestPartition($value) {
-        $degrees = array_map(function($x) {
-            return $x->degree($value);
-        }, $this->_partitionRef);
-        $highestDegree = max($degrees);
-        return array_flip($degrees)[$highestDegree];
+        if (!isset($this->_memo[$value])) {
+            $_h = 0;
+            $_hi = 0;
+            for ($i = 0; $i < count($this->_partitionRef); $i++) {
+                $d = $this->_partitionRef[$i]->degree($value);
+                if ($d > $_h) {
+                    $_h = $d;
+                    $_hi = $i;
+                }
+            }
+            $this->_memo[$value] = $_hi;
+        }
+        return $this->_memo[$value];
     }
 
     public function train() {
-        $generatedPattern = array_map(function($v) {
-            return $this->nearestPartition($v['value']);
-        }, $this->_dataset);
-        for ($i = 1; $i < count($generatedPattern); $i++) {
-            $precedent = $generatedPattern[$i - 1];
-            $consequent = $generatedPattern[$i];
-            $this->_ruleset[$precedent][] = $consequent;
-            $this->_ruleset[$precedent] = array_unique($this->_ruleset[$precedent]);
+        $generatedPattern = [];
+        for ($i = 0; $i < count($this->_dataset); $i++) {
+            $generatedPattern[] = $this->nearestPartition($this->_dataset[$i]['value']);
+            if ($i > 0) {
+                $precedent = $generatedPattern[$i - 1];
+                $consequent = $generatedPattern[$i];
+                $this->_ruleset[$precedent][] = $consequent;
+                $this->_ruleset[$precedent] = array_unique($this->_ruleset[$precedent]);
+            }
         }
     }
 
@@ -79,7 +100,7 @@ class FTS {
             $key = $a['key'];
             $value = $a['value'];
             $partitionIndex = $this->nearestPartition($value);
-            $partitionConsequent = iseet($this->_ruleset[$partitionIndex]) ? $this->_ruleset[$partitionIndex] : array();
+            $partitionConsequent = isset($this->_ruleset[$partitionIndex]) ? $this->_ruleset[$partitionIndex] : array();
             $predictedValue = count($partitionConsequent) === 0 ?
                 ($this->_partitionRef[$partitionIndex]->getMedian()) :
                 (array_reduce(array_map(function ($x) {

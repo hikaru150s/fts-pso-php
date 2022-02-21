@@ -1,5 +1,5 @@
 <?php
-require_once './particle';
+require_once 'particle.php';
 
 class Swarm {
     private $_maxIteration;
@@ -29,7 +29,7 @@ class Swarm {
         $this->_swarmConfidence = isset($options['swarmConfidence']) ? $options['swarmConfidence'] : rand(0, 1);
         $this->_particles = array();
         for ($i = 0; $i < $options['particleCount']; $i++) {
-            $this->particles[] = new Particle(array(
+            $this->_particles[] = new Particle(array(
                 'min' => $options['spaces']['min'],
                 'max' => $options['spaces']['max'],
                 'fitFn' => $this->_fitFn,
@@ -38,26 +38,29 @@ class Swarm {
                 'weight' => $this->_w,
             ));
         }
-        $bestParticle = $this->_selectFn(array_map(function($v) {
-            return $v->getBestFitResult();
-        }, $this->_particles));
+        $bfr = [];
+        foreach ($this->_particles as $v) {
+            $bfr[] = $v->getBestFitResult();
+        }
+        $bestParticle = $this->_selectFn->call($this, $bfr);
         $this->_bestFit = $this->_particles[$bestParticle]->getBestFitResult();
         $this->_bestPosition = $this->_particles[$bestParticle]->getBestPosition();
     }
 
     public function optimize() {
-        $stop = $this->_stopCriteria($this->_bestFit);
+        $stop = $this->_stopCriteria->call($this, $this->_bestFit);
         $currentIteration = 0;
         while (!$stop && $currentIteration < $this->_maxIteration) {
+            echo "Current Iteration: $currentIteration\n";
             foreach ($this->_particles as $particle) {
                 $particle->update($this->_swarmConfidence, $this->_bestPosition);
             }
-            $bestParticle = $this->_selectFn(array_map(function($v) {
+            $bestParticle = $this->_selectFn->call($this, array_map(function($v) {
                 return $v->getBestFitResult();
             }, $this->_particles));
             $this->_bestFit = $this->_particles[$bestParticle]->getBestFitResult();
             $this->_bestPosition = $this->_particles[$bestParticle]->getBestPosition();
-            $stop = $this->_stopCriteria($this->_bestFit);
+            $stop = $this->_stopCriteria->call($this, $this->_bestFit);
             $currentIteration += 1;
         }
         return $currentIteration;

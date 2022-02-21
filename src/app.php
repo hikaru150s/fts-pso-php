@@ -1,7 +1,7 @@
 <?php
-require_once './FTS';
-require_once './swarm';
-require_once './utils';
+require_once 'FTS.php';
+require_once 'swarm.php';
+require_once 'utils.php';
 
 function main() {
     $dataset = array(
@@ -66,18 +66,19 @@ function main() {
         array('key' => '2020-November', 'value' => 1665546),
         array('key' => '2020-Desember', 'value' => 1668164),
     );
-    $min = min(array_map(function($v) {
+    $_val = array_map(function($v) {
         return $v['value'];
-    }, $dataset));
-    $max = max(array_map(function($v) {
-        return $v['value'];
-    }, $dataset));
+    }, $dataset);
+    $min = min($_val);
+    $max = max($_val);
     $minBorder = $min * 0.1;
     $maxBorder = $max * 0.1;
     $engine = new FTS($dataset, array(
         'minMargin' => $minBorder,
         'maxMargin' => $maxBorder,
         'interval' => (($max * 1.1) - ($min * 0.9)) / 10,
+        '_maxVal' => $max,
+        '_minVal' => $min,
     ));
     $engine->train();
     $singleResult = $engine->test();
@@ -89,31 +90,40 @@ function main() {
     }, array_slice($singleResult, 1, count($singleResult) - 1));
     $mse = meanSquaredError($actual, $forecasted);
     $afer = averageForecastingErrorRate($actual, $forecasted);
-    print_r($singleResult);
-    echo "MSE: $mse";
-    echo "AFER: $afer";
+    //print_r($singleResult);
+    echo "MSE: $mse\n";
+    echo "AFER: $afer\n";
 
     $swarm = new Swarm(array(
         'spaces' => array('min' => 10, 'max' => 1000),
         'weight' => 0.1,
-        'maxIteration' => 10000,
-        'particleCount' => 100,
+        'maxIteration' => 1,
+        'particleCount' => 10,
         'swarmConfidence' => 2,
         'selfConfidence' => 2,
-        'fitnessFunction' => function ($n) {
+        'fitnessFunction' => function ($n) use ($dataset, $minBorder, $maxBorder, $min, $max) {
             $subFts = new FTS($dataset, array(
                 'minMargin' => $minBorder,
                 'maxMargin' => $maxBorder,
                 'interval' => (($max * 1.1) - ($min * 0.9)) / abs($n),
+                '_maxVal' => $max,
+                '_minVal' => $min,
             ));
             $subFts->train();
-            $subResult = $engine->test();
-            $subForecasted = array_map(function($v) {
-                return $v['predicted'];
-            }, array_slice($subResult, 0, count($subResult) - 1));
-            $subActual = array_map(function($v) {
-                return $v['value'];
-            }, array_slice($subResult, 1, count($subResult) - 1));
+            $subResult = $subFts->test();
+            $subForecasted = [];
+            $subActual = [];
+            $_a = count($subResult);
+            for ($i = 0; $i < $_a; $i++) {
+                if ($i === 0) {
+                    $subForecasted[] = $subResult[$i]['predicted'];
+                } else if ($i === ($_a - 1)) {
+                    $subActual[] = $subResult[$i]['value'];
+                } else {
+                    $subForecasted[] = $subResult[$i]['predicted'];
+                    $subActual[] = $subResult[$i]['value'];
+                }
+            }
             return array(
                 'mse' => meanSquaredError($subActual, $subForecasted),
                 'afer' => averageForecastingErrorRate($subActual, $subForecasted),
@@ -133,8 +143,12 @@ function main() {
         },
     ));
     $lastIteration = $swarm->optimize();
-    echo 'Best interval count: ' + $swarm->getBestPosition();
-    echo 'Iteration passed: ' + $lastIteration;
+    echo 'Best interval count: ';
+    echo $swarm->getBestPosition();
+    echo "\n";
+    echo 'Iteration passed: ';
+    echo $lastIteration;
+    echo "\n";
     $optimizedEngine = new FTS($dataset, array(
         'minMargin' => $minBorder,
         'maxMargin' => $maxBorder,
@@ -150,13 +164,16 @@ function main() {
     }, array_slice($optimizedResult, 1, count($optimizedResult) - 1));
     $optimizedMse = meanSquaredError($optimizedActual, $optimizedForecast);
     $optimizedAfer = averageForecastingErrorRate($optimizedActual, $optimizedForecast);
-    print_r($optimizedResult);
-    echo "MSE: $optimizedMse";
-    echo "AFER: $optimizedAfer";
+    //print_r($optimizedResult);
+    echo "MSE: $optimizedMse\n";
+    echo "AFER: $optimizedAfer\n";
 }
 
 try {
+    echo "Running\n";
     main();
 } catch (Exception $e) {
-    echo 'Error:', $e->getMessage(), '\n';
+    echo 'Error:', $e->getMessage(), "\n";
+} finally {
+    echo "Closing\n";
 }

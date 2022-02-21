@@ -30,11 +30,11 @@ class Particle {
     }
 
     private function fit($position) {
-        return $this->_fitFn($position);
+        return $this->_fitFn->call($this, $position);
     }
 
     private function select() {
-        return $this._selectFn($this->_fittingResults);
+        return $this->_selectFn->call($this, $this->_fittingResults);
     }
 
     public function update($swarmConfidence, $globalBest) {
@@ -47,6 +47,6 @@ class Particle {
         $this->_positions[] = $nextPosition;
         $nextFit = $this->fit($nextPosition);
         $this->_fittingResults[] = $nextFit;
-        $this->_bestPositionIndex = $this.select();
+        $this->_bestPositionIndex = $this->select();
     }
 }
