@@ -8,6 +8,8 @@ class Particle {
     private $_selectFn;
     private $_selfConfidence;
     private $_weight;
+    private $_min;
+    private $_max;
 
     public function getBestPosition() {
         return $this->_positions[$this->_bestPositionIndex];
@@ -20,8 +22,10 @@ class Particle {
     public function __construct($options) {
         $this->_fitFn = $options['fitFn'];
         $this->_selectFn = $options['selectorFn'];
-        $this->_velocities = array($options['min'] + (rand(0, 1) * ($options['max'] - $options['min'])));
-        $this->_positions = array($options['min'] + (rand(0, 1) * ($options['max'] - $options['min'])));
+        $this->_min = $options['min'];
+        $this->_max = $options['max'];
+        $this->_velocities = array($this->_min + (rand(0, 1) * ($this->_max - $this->_min)));
+        $this->_positions = array($this->_min + (rand(0, 1) * ($this->_max - $this->_min)));
         $this->_selfConfidence = isset($options['selfConfidence']) ? $options['selfConfidence'] : rand(0, 1);
         $this->_bestPositionIndex = 0;
         $firstFit = $this->fit($this->_positions[0]);
@@ -38,6 +42,7 @@ class Particle {
     }
 
     public function update($swarmConfidence, $globalBest) {
+        // Should a min-max guard be applied to this block?
         $latestVelocity = $this->_velocities[count($this->_velocities) - 1];
         $latestPosition = $this->_positions[count($this->_positions) - 1];
         $localBest = $this->_positions[$this->_bestPositionIndex];
