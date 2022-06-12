@@ -69,7 +69,8 @@ class FTS {
         if (!isset($this->_memo[$value])) {
             $_h = 0;
             $_hi = 0;
-            for ($i = 0; $i < count($this->_partitionRef); $i++) {
+            $len = count($this->_partitionRef);
+            for ($i = 0; $i < $len; $i++) {
                 $d = $this->_partitionRef[$i]->degree($value);
                 if ($d > $_h) {
                     $_h = $d;
@@ -83,7 +84,8 @@ class FTS {
 
     public function train() {
         $generatedPattern = [];
-        for ($i = 0; $i < count($this->_dataset); $i++) {
+        $len = count($this->_dataset);
+        for ($i = 0; $i < $len; $i++) {
             $generatedPattern[] = $this->nearestPartition($this->_dataset[$i]['value']);
             if ($i > 0) {
                 $precedent = $generatedPattern[$i - 1];
@@ -101,13 +103,14 @@ class FTS {
             $value = $a['value'];
             $partitionIndex = $this->nearestPartition($value);
             $partitionConsequent = isset($this->_ruleset[$partitionIndex]) ? $this->_ruleset[$partitionIndex] : array();
-            $predictedValue = count($partitionConsequent) === 0 ?
+            $partitionConsequentLen = count($partitionConsequent);
+            $predictedValue = $partitionConsequentLen === 0 ?
                 ($this->_partitionRef[$partitionIndex]->getMedian()) :
                 (array_reduce(array_map(function ($x) {
                     return $this->_partitionRef[$x]->getMedian();
                 }, $partitionConsequent), function($p, $c) {
                     return $p + $c;
-                }, 0) / count($partitionConsequent));
+                }, 0) / $partitionConsequentLen);
             return array(
                 'key' => $key,
                 'value' => $value,

@@ -48,7 +48,8 @@ class Particle {
         $localBest = $this->_positions[$this->_bestPositionIndex];
         $next = ($this->_weight * $latestVelocity) + ($this->_selfConfidence * rand(0, 1) * ($localBest - $latestPosition)) + ($swarmConfidence * rand(0, 1) * ($globalBest - $latestPosition));
         $this->_velocities[] = $next;
-        $nextPosition = $latestPosition + $next;
+        // To avoid particle to go out of boundaries, we implement rotating algorithm using modulo so it will always return into a number inside boundaries
+        $nextPosition = (($latestPosition + $next) % ($this->_max - $this->_min)) + $this->_min;
         $this->_positions[] = $nextPosition;
         $nextFit = $this->fit($nextPosition);
         $this->_fittingResults[] = $nextFit;
